@@ -4,9 +4,11 @@ import numpy as np
 import math
 import rasterio
 from rasterio.plot import show
+from multiprocessing import Pool
 
-dem = rasterio.open('data/output_COP30.tif')
+dem = rasterio.open('../../data/output_COP30.tif')
 dem_array = dem.read(1)
+print(dem_array[0][0])
 transform = dem.transform
 
 """
@@ -15,6 +17,9 @@ plt.colorbar()
 plt.title('Digital Elevation Model')
 plt.show()
 """
+
+
+
 
 # Determine if the point (x2, y2) is visible from (x1, y1) in dem_array.
 def is_visible(dem_array, x1, y1, x2, y2):
@@ -64,20 +69,32 @@ transmitter_x, transmitter_y = [
  
 # Create an empty array for visibility
 visibility_array = np.zeros_like(dem_array)
- 
-# Check visibility for each pixel
-import time
-start = time.time()
-print('Starting...')
-for x in range(dem_array.shape[1]):
-    for y in range(dem_array.shape[0]):
-        visibility_array[y, x] = is_visible(
-            dem_array, transmitter_x, transmitter_y, x, y)
- 
-print('Elapsed time:', time.time() - start)
-with rasterio.open('data/result/los.tif', 'w', **dem.meta) as dst:
-    dst.write(visibility_array, 1)
- 
+def process_section(x_range):
+    visibility_array_section = np.zeros((dem_array.shape[0], len(x_range)))
+    import time
+    start = time.time()
+    print('Starting section...')
+    for i, x in enumerate(x_range):
+        if x % 100 == 0:
+            print('Column', x, 'in section', visibility_array_section.shape[1], 'of', dem_array.shape[1])
+            print('Elapsed time:', float(time.time() - start))
+            start = time.time()
+        for y in range(dem_array.shape[0]):
+            visibility_array_section[y, i] = is_visible(
+                dem_array, transmitter_x, transmitter_y, x, y)
+    return visibility_array_section
+
+if __name__ == '__main__':
+    with Pool() as p:
+        x_ranges = [range(i, i+100) for i in range(0, dem_array.shape[1], 100)]
+        results = p.map(process_section, x_ranges)
+    visibility_array = np.concatenate(results, axis=1)
+    print("Saving...")
+    with rasterio.open('../../data/result/los.tif', 'w', **dem.meta) as dst:
+        dst.write(visibility_array, 1)
+    print("Done")
+
+# Plot the visibility array
 plt.imshow(visibility_array, cmap='gray')
 plt.colorbar()
 plt.title('Line of Sight Analysis')
