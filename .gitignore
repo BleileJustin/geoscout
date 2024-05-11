@@ -1,6 +1,7 @@
 # Test Data
 data/
-
+# Broken Scripts
+server/scripts/rnd/
 # Logs
 logs
 *.log
